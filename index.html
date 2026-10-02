@@ -195,9 +195,29 @@ a { color: var(--azul); }
 
   <!-- ============ AJUSTES ============ -->
   <section id="v-aj" class="vista">
+    <div class="caja"><h3 style="margin-top:0">🧪 Diagnóstico</h3>
+      <p class="suave">Pruébalo todo de una vez antes de usar la app en serio: instalación, almacén del teléfono, conexión, cámara y la IA.</p>
+      <button class="boton" id="b-diag">▶️ Probar todo</button>
+      <div id="diag-out" class="suave" style="margin-top:10px;line-height:1.7"></div>
+      <div style="height:10px"></div>
+      <input id="f-prueba" type="file" accept="image/*" capture="environment" hidden>
+      <button class="boton sec" onclick="document.getElementById('f-prueba').click()">📷 Probar la cámara (sin gastar IA)</button>
+      <div id="foto-prueba" class="suave" style="margin-top:10px"></div>
+    </div>
     <div class="caja"><h3 style="margin-top:0">🤖 La IA</h3>
       <p class="suave">Pega aquí <strong>tu clave de la IA</strong> (una sola vez). Se guarda <strong>solo en este teléfono</strong>.
       Se saca en <strong>console.anthropic.com → API keys</strong> y hay que añadir algo de saldo (con 5 € vas sobrado para empezar).</p>
+      <label>¿Qué IA quieres usar?</label>
+      <select id="aj-proveedor">
+        <option value="gemini">Gemini de Google — GRATIS (para probar)</option>
+        <option value="claude">Claude de Anthropic — de pago, la más exacta</option>
+      </select>
+      <div id="bloque-gemini">
+        <p class="suave" style="margin-top:10px">Gratis y <strong>sin tarjeta</strong>: entra en <strong>aistudio.google.com/apikey</strong> con tu cuenta de Google, pulsa <strong>Create API key</strong> y copia la clave (empieza por <em>AIza</em>). Con la cuota gratuita puedes analizar muchos sellos al día. Google puede usar los datos del plan gratuito para mejorar sus productos (son solo fotos de sellos).</p>
+        <label>Clave de Gemini</label>
+        <input id="aj-clave-gemini" type="password" autocomplete="off" placeholder="AIza…">
+      </div>
+      <div id="bloque-claude">
       <label>Clave de la IA</label>
       <input id="aj-clave" type="password" autocomplete="off" placeholder="sk-ant-…">
       <label>Modelo de la IA</label>
@@ -206,6 +226,7 @@ a { color: var(--azul); }
         <option value="claude-opus-5-5">Opus 5.5 — muy exacto, algo más barato</option>
         <option value="claude-sonnet-5-5">Sonnet 5.5 — económico y rápido (recomendado para el día a día)</option>
       </select>
+      </div>
       <label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--texto)">
         <input type="checkbox" id="aj-busqueda" style="width:22px;height:22px"> Buscar precios y datos en internet en cada foto (más exacto, pero cuesta unas 2-3 veces más)</label>
       <label>Avisarme con 💎 si un sello vale más de (€)</label>

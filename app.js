@@ -4,7 +4,7 @@
    (Claude) se llama directamente desde aquí con la clave que pone Emmanuel en Ajustes.
    No hay servidor ni nube. */
 
-const APP_VERSION = "1.0.2";
+const APP_VERSION = "1.0.4";
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -17,11 +17,14 @@ function quitarVelo() { $("#velo").classList.remove("on"); }
 
 /* ================= configuración (en este teléfono) ================= */
 const CFG = () => ({
+  proveedor: leerLS("proveedor") || "claude",
+  claveG: leerLS("clave_gemini").trim(),
   clave: leerLS("clave_api").trim(),
   modelo: leerLS("modelo") || "claude-sonnet-5-5",
   busqueda: leerLS("busqueda") === "1",
   umbral: parseFloat(leerLS("umbral")) || 50,
 });
+const tieneClave = () => { const c = CFG(); return c.proveedor === "gemini" ? !!c.claveG : !!c.clave; };
 const ESTADO = { get aviso_valor() { return CFG().umbral; } };
 
 /* ================= base de datos (IndexedDB) ================= */
@@ -144,10 +147,62 @@ async function borrarSello(id) {
   CACHE_FOTOS.delete(Number(id));
 }
 
+/* ================= Gemini de Google (plan gratuito) ================= */
+const GEM = "https://generativelanguage.googleapis.com/v1beta";
+async function mensajeGemini(r) {
+  let det = ""; try { det = (await r.json()).error?.message || ""; } catch (e) {}
+  if (r.status === 400 && /API key/i.test(det)) return "La clave de Gemini no es válida. Revísala en ⚙️ Ajustes.";
+  if (r.status === 403) return "Gemini no deja usar esa clave (¿permiso o país?). " + det.slice(0, 120);
+  if (r.status === 429) return "Se ha agotado la cuota gratuita de Gemini por ahora (por minuto o por día). Espera un poco y repite.";
+  return `Error de Gemini (${r.status}): ${det.slice(0, 200)}`;
+}
+async function modeloGemini(clave) {
+  const guardado = leerLS("modelo_gemini");
+  if (guardado) return guardado;
+  const r = await fetch(`${GEM}/models?pageSize=200`, { headers: { "x-goog-api-key": clave } });
+  if (!r.ok) throw new Error(await mensajeGemini(r));
+  const lista = ((await r.json()).models || [])
+    .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map(m => m.name.replace("models/", ""))
+    .filter(n => /^gemini-[\d.]+-flash$/.test(n));
+  lista.sort((x, y) => parseFloat(y.split("-")[1]) - parseFloat(x.split("-")[1]));
+  const elegido = lista[0] || "gemini-2.5-flash";
+  guardarLS("modelo_gemini", elegido);
+  return elegido;
+}
+async function llamarGemini(contenido, usarBusqueda) {
+  const cfg = CFG();
+  if (!cfg.claveG) throw new Error("Falta la clave de Gemini. Ve a ⚙️ Ajustes y pégala (es gratis: aistudio.google.com/apikey).");
+  const modelo = await modeloGemini(cfg.claveG);
+  const parts = contenido.map(b => b.type === "image"
+    ? { inlineData: { mimeType: b.source.media_type, data: b.source.data } } : { text: b.text });
+  const cuerpo = { systemInstruction: { parts: [{ text: CONOCIMIENTO }] },
+    contents: [{ role: "user", parts }],
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.2 } };
+  if (usarBusqueda) cuerpo.tools = [{ google_search: {} }];
+  else cuerpo.generationConfig.responseMimeType = "application/json";
+  let r;
+  for (let intento = 0; intento < 3; intento++) {
+    try {
+      r = await fetch(`${GEM}/models/${modelo}:generateContent`, { method: "POST",
+        headers: { "x-goog-api-key": cfg.claveG, "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
+    } catch (e) { throw new Error("No hay conexión con Gemini. Comprueba tu internet y vuelve a intentarlo."); }
+    if (r.status === 503 && intento < 2) { await new Promise(ok => setTimeout(ok, 6000)); continue; }
+    break;
+  }
+  if (r.status === 404) { guardarLS("modelo_gemini", ""); throw new Error("Ese modelo de Gemini ya no está disponible; repite y elegiré otro."); }
+  if (!r.ok) throw new Error(await mensajeGemini(r));
+  const d = await r.json();
+  const texto = (d.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+  if (!texto) throw new Error("Gemini no devolvió respuesta (puede que haya bloqueado la imagen). Repite la foto.");
+  return { texto, sinBusqueda: false };
+}
+
 /* ================= la IA (Claude, directo desde el teléfono) ================= */
 let aviso_modelo = false;
 async function llamarClaude(contenido, usarBusqueda, experto) {
   const cfg = CFG();
+  if (cfg.proveedor === "gemini") return await llamarGemini(contenido, usarBusqueda);
   if (experto) cfg.modelo = leerLS("modelo_experto") || "claude-fable-5-1";
   if (!cfg.clave) throw new Error("Falta la clave de la IA. Ve a ⚙️ Ajustes y pégala (se saca en console.anthropic.com).");
   const pedir = async (conBusqueda) => {
@@ -258,7 +313,7 @@ function avisos() {
   if (!instalada) h += `<div class="aviso error">📲 <strong>Instálala para no perder tus sellos:</strong> abre este enlace en
     <strong>Safari</strong> → Compartir → <strong>Añadir a pantalla de inicio</strong> y úsala siempre desde el icono.
     Safari borra los datos de las webs que no se usan en 7 días; las apps instaladas están a salvo.</div>`;
-  if (!CFG().clave) h += `<div class="aviso">🔑 Falta la clave de la IA. Ve a <strong>⚙️ Ajustes</strong> y pégala (una sola vez).</div>`;
+  if (!tieneClave()) h += `<div class="aviso">🔑 Falta la clave de la IA. Ve a <strong>⚙️ Ajustes</strong> y pégala (una sola vez).</div>`;
   const ult = leerLS("ultima_copia");
   const dias = ult ? (Date.now() - Number(ult)) / 864e5 : Infinity;
   if (SELLOS.length >= 20 && dias > 30) h += `<div class="aviso">💾 Llevas ${SELLOS.length} sellos y ${ult ? "hace más de 30 días que no haces" : "aún no has hecho"} copia de seguridad.
@@ -694,11 +749,18 @@ async function abrirDetalle(id) {
 /* ================= ajustes ================= */
 function cargarAjustes() {
   const c = CFG();
+  $("#aj-proveedor").value = c.proveedor;
+  $("#aj-clave-gemini").value = c.claveG;
+  const verBloques = () => { const g = $("#aj-proveedor").value === "gemini";
+    $("#bloque-gemini").hidden = !g; $("#bloque-claude").hidden = g; };
+  $("#aj-proveedor").onchange = verBloques; verBloques();
   $("#aj-clave").value = c.clave;
   $("#aj-modelo").value = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"].includes(c.modelo) ? c.modelo : "claude-sonnet-5-5";
   $("#aj-busqueda").checked = c.busqueda;
   $("#aj-umbral").value = c.umbral;
   $("#aj-guardar").onclick = () => {
+    guardarLS("proveedor", $("#aj-proveedor").value);
+    guardarLS("clave_gemini", $("#aj-clave-gemini").value.trim());
     guardarLS("clave_api", $("#aj-clave").value.trim());
     guardarLS("modelo", $("#aj-modelo").value);
     guardarLS("busqueda", $("#aj-busqueda").checked ? "1" : "0");
@@ -708,14 +770,38 @@ function cargarAjustes() {
   $("#aj-estado").textContent = `${SELLOS.length} sellos guardados en este teléfono · versión ${APP_VERSION}`;
   $("#b-exportar").onclick = exportarTodo;
   $("#b-probar").onclick = probarIA;
+  $("#b-diag").onclick = diagnostico;
+  $("#f-prueba").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) probarCamara(f); };
   $("#f-importar").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importarZip(f); };
+}
+
+async function probarGemini(out) {
+  out.innerHTML = "";
+  const paso = async (nombre, fn) => {
+    try { const r = await fn(); out.innerHTML += `✅ ${nombre}${r ? " — " + esc(r) : ""}<br>`; return true; }
+    catch (e) { out.innerHTML += `❌ ${nombre}: ${esc(e.message)}<br>`; return false; }
+  };
+  const c = CFG();
+  let ok = await paso("Clave y conexión con Gemini", async () => {
+    guardarLS("modelo_gemini", ""); const m = await modeloGemini(c.claveG); return "modelo " + m; });
+  if (ok) ok = await paso("La IA responde", async () => {
+    const r = await llamarGemini([{ type: "text", text: 'Responde solo con este JSON: {"ok": true}' }], false);
+    return r.texto.trim().slice(0, 30); });
+  if (ok) await paso("Lectura de imágenes", async () => {
+    const c2 = document.createElement("canvas"); c2.width = c2.height = 64;
+    const x = c2.getContext("2d"); x.fillStyle = "#c33"; x.fillRect(0, 0, 64, 64);
+    const r = await llamarGemini([imgBloque(c2.toDataURL("image/jpeg")), { type: "text", text: 'Responde solo con JSON {"color":"..."} con el color de la imagen.' }], false);
+    return "ve la imagen " + r.texto.trim().slice(0, 40); });
 }
 
 /* Prueba rápida de la conexión con la IA: clave, modelo y búsqueda en internet */
 async function probarIA() {
   const out = $("#prueba-ia");
+  guardarLS("proveedor", $("#aj-proveedor").value);
+  guardarLS("clave_gemini", $("#aj-clave-gemini").value.trim());
   guardarLS("clave_api", $("#aj-clave").value.trim());
   guardarLS("modelo", $("#aj-modelo").value);
+  if ($("#aj-proveedor").value === "gemini") return await probarGemini(out);
   out.innerHTML = "Probando…";
   const paso = async (nombre, fn) => {
     try { const r = await fn(); out.innerHTML += `<br>✅ ${nombre}${r ? " — " + esc(r) : ""}`; return true; }
@@ -751,6 +837,74 @@ async function probarIA() {
     if (!r.ok) throw new Error(await mensajeHttp(r));
     const d = await r.json(); return "ve la imagen (" + (d.content?.[0]?.text || "").trim() + ")";
   });
+}
+
+/* Diagnóstico completo: todo lo que puede fallar en el teléfono */
+async function diagnostico() {
+  const out = $("#diag-out");
+  out.innerHTML = "Probando…<br>";
+  const ok = (t, d) => out.innerHTML += `✅ ${t}${d ? " — " + esc(d) : ""}<br>`;
+  const aviso = (t, d) => out.innerHTML += `⚠️ ${t}${d ? " — " + esc(d) : ""}<br>`;
+  const mal = (t, d) => out.innerHTML += `❌ ${t}${d ? " — " + esc(d) : ""}<br>`;
+  out.innerHTML = "";
+  // 1. versión publicada
+  try {
+    const r = await fetch("sw.js?cb=" + Date.now(), { cache: "no-store" });
+    const v = (/VERSION = '([^']+)'/.exec(await r.text()) || [])[1];
+    if (!v) aviso("Versión", "no se pudo leer");
+    else if (v === APP_VERSION) ok("Versión de la app", APP_VERSION + " (la última)");
+    else aviso("Versión de la app", `tienes ${APP_VERSION} y hay una nueva (${v}). Cierra la app del todo y ábrela otra vez.`);
+  } catch (e) { mal("Conexión a internet", "no se pudo comprobar la versión: " + e.message); }
+  // 2. instalada
+  const inst = window.navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+  inst ? ok("Instalada en la pantalla de inicio") : aviso("No está instalada", "ábrela en Safari → Compartir → Añadir a pantalla de inicio, o perderás los datos a los 7 días sin usarla");
+  // 3. almacén
+  try {
+    await BD._tx("fotos", "readwrite", t => t.objectStore("fotos").put("prueba", -1));
+    const v = await BD.foto(-1);
+    await BD._tx("fotos", "readwrite", t => t.objectStore("fotos").delete(-1));
+    v === "prueba" ? ok("Almacén del teléfono (IndexedDB)", "escribe y lee bien") : mal("Almacén del teléfono", "no devolvió lo guardado");
+  } catch (e) { mal("Almacén del teléfono", e.message + " (¿pestaña privada?)"); }
+  try {
+    const p = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null;
+    const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
+    const mb = (n) => Math.round(n / 1048576) + " MB";
+    if (est) ok("Espacio", `usado ${mb(est.usage || 0)} de ${mb(est.quota || 0)} disponibles`);
+    p ? ok("Almacenamiento protegido") : (inst ? ok("Almacenamiento", "protegido por estar instalada") : aviso("Almacenamiento sin proteger", "instálala para que Safari no lo borre"));
+  } catch (e) {}
+  // 4. service worker
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.controller ? ok("Funciona sin internet (service worker)") : aviso("Sin copia offline todavía", "ciérrala y ábrela una vez más");
+  } else mal("Service worker", "este navegador no lo permite");
+  // 5. cámara / fotos
+  const cam = document.createElement("input"); cam.type = "file";
+  ok("Entrada de cámara", "usa el botón «Probar la cámara» de abajo para comprobarla de verdad");
+  ok("Datos guardados", `${SELLOS.length} sellos`);
+  // 6. IA
+  const c = CFG();
+  if (!tieneClave()) { mal("Clave de la IA", "falta: pégala arriba y pulsa Guardar"); return; }
+  const k = c.proveedor === "gemini" ? c.claveG : c.clave;
+  ok(`Clave de ${c.proveedor === "gemini" ? "Gemini" : "Claude"} puesta`, "termina en …" + k.slice(-4));
+  out.innerHTML += `<br><strong>La IA:</strong> mira el resultado de «Probar la IA» aquí abajo ↓<br>`;
+  await probarIA();
+  out.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* Prueba de cámara sin gastar nada de IA: solo lee la foto y enseña qué datos tiene */
+async function probarCamara(file) {
+  const out = $("#foto-prueba");
+  out.textContent = "Leyendo la foto…";
+  const t0 = performance.now();
+  try {
+    const canvas = await reducir(file, 2048);
+    const url = canvas.toDataURL("image/jpeg", 0.9);
+    const ms = Math.round(performance.now() - t0);
+    out.innerHTML = `✅ La cámara y la lectura funcionan.<br>
+      Archivo: <strong>${esc(file.type || "sin tipo")}</strong>, ${Math.round(file.size / 1024)} KB<br>
+      Se enviaría a la IA a <strong>${canvas.width}×${canvas.height}</strong> px (${Math.round(url.length * 0.75 / 1024)} KB), preparada en ${ms} ms.<br>
+      <span class="suave">Comprueba que la imagen sale <strong>derecha</strong> y no girada:</span><br>
+      <img src="${url}" style="max-width:100%;max-height:260px;border-radius:10px;margin-top:6px;background:#000">`;
+  } catch (e) { out.innerHTML = `❌ No se pudo leer la foto: ${esc(e.message)}`; }
 }
 
 /* ---------- exportar / importar ---------- */
