@@ -200,14 +200,20 @@ a { color: var(--azul); }
       Se saca en <strong>console.anthropic.com → API keys</strong> y hay que añadir algo de saldo (con 5 € vas sobrado para empezar).</p>
       <label>Clave de la IA</label>
       <input id="aj-clave" type="password" autocomplete="off" placeholder="sk-ant-…">
-      <label>Modelo</label>
-      <input id="aj-modelo" placeholder="claude-sonnet-5-5">
+      <label>Modelo de la IA</label>
+      <select id="aj-modelo">
+        <option value="claude-fable-5-1">Fable 5.1 — la máxima exactitud (recomendado)</option>
+        <option value="claude-opus-5-5">Opus 5.5 — muy exacto, algo más barato</option>
+        <option value="claude-sonnet-5-5">Sonnet 5.5 — económico y rápido</option>
+      </select>
       <label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--texto)">
         <input type="checkbox" id="aj-busqueda" style="width:22px;height:22px"> Buscar precios y datos en internet (más exacto, cuesta algo más)</label>
       <label>Avisarme con 💎 si un sello vale más de (€)</label>
       <input id="aj-umbral" inputmode="decimal">
       <button class="boton" style="margin-top:12px" id="aj-guardar">💾 Guardar</button>
       <div id="aj-ok" class="suave" style="margin-top:8px"></div>
+      <button class="boton sec" style="margin-top:10px" id="b-probar">🧪 Probar la IA</button>
+      <div id="prueba-ia" class="suave" style="margin-top:8px"></div>
       <p class="suave">Cada foto gasta unos céntimos de tu saldo de la IA.</p>
     </div>
     <div class="caja"><h3 style="margin-top:0">💾 Copia de seguridad</h3>

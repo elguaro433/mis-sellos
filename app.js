@@ -4,7 +4,7 @@
    (Claude) se llama directamente desde aquí con la clave que pone Emmanuel en Ajustes.
    No hay servidor ni nube. */
 
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18,7 +18,7 @@ function quitarVelo() { $("#velo").classList.remove("on"); }
 /* ================= configuración (en este teléfono) ================= */
 const CFG = () => ({
   clave: leerLS("clave_api").trim(),
-  modelo: leerLS("modelo") || "claude-sonnet-5-5",
+  modelo: leerLS("modelo") || "claude-fable-5-1",
   busqueda: leerLS("busqueda") !== "0",
   umbral: parseFloat(leerLS("umbral")) || 50,
 });
@@ -145,6 +145,7 @@ async function borrarSello(id) {
 }
 
 /* ================= la IA (Claude, directo desde el teléfono) ================= */
+let aviso_modelo = false;
 async function llamarClaude(contenido, usarBusqueda) {
   const cfg = CFG();
   if (!cfg.clave) throw new Error("Falta la clave de la IA. Ve a ⚙️ Ajustes y pégala (se saca en console.anthropic.com).");
@@ -168,6 +169,11 @@ async function llamarClaude(contenido, usarBusqueda) {
   let resp, sinBusqueda = false;
   try { resp = await pedir(usarBusqueda); }
   catch (e) {
+    if ((e.status === 404 || /model/i.test(e.message)) && cfg.modelo !== "claude-sonnet-5-5") {
+      // ese modelo no está disponible en la cuenta: sigue con Sonnet y lo avisa
+      cfg.modelo = "claude-sonnet-5-5"; guardarLS("modelo", cfg.modelo);
+      aviso_modelo = true; return await llamarClaude(contenido, usarBusqueda);
+    }
     if (usarBusqueda && e.status === 400) { resp = await pedir(false); sinBusqueda = true; }
     else if (e instanceof TypeError) throw new Error("No hay conexión con la IA. Comprueba tu internet y vuelve a intentarlo.");
     else throw e;
@@ -688,19 +694,62 @@ async function abrirDetalle(id) {
 function cargarAjustes() {
   const c = CFG();
   $("#aj-clave").value = c.clave;
-  $("#aj-modelo").value = c.modelo;
+  $("#aj-modelo").value = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"].includes(c.modelo) ? c.modelo : "claude-fable-5-1";
   $("#aj-busqueda").checked = c.busqueda;
   $("#aj-umbral").value = c.umbral;
   $("#aj-guardar").onclick = () => {
     guardarLS("clave_api", $("#aj-clave").value.trim());
-    guardarLS("modelo", $("#aj-modelo").value.trim() || "claude-sonnet-5-5");
+    guardarLS("modelo", $("#aj-modelo").value);
     guardarLS("busqueda", $("#aj-busqueda").checked ? "1" : "0");
     guardarLS("umbral", String(parseFloat($("#aj-umbral").value) || 50));
     $("#aj-ok").textContent = "✅ Guardado en este teléfono"; avisos();
   };
   $("#aj-estado").textContent = `${SELLOS.length} sellos guardados en este teléfono · versión ${APP_VERSION}`;
   $("#b-exportar").onclick = exportarTodo;
+  $("#b-probar").onclick = probarIA;
   $("#f-importar").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importarZip(f); };
+}
+
+/* Prueba rápida de la conexión con la IA: clave, modelo y búsqueda en internet */
+async function probarIA() {
+  const out = $("#prueba-ia");
+  guardarLS("clave_api", $("#aj-clave").value.trim());
+  guardarLS("modelo", $("#aj-modelo").value);
+  out.innerHTML = "Probando…";
+  const paso = async (nombre, fn) => {
+    try { const r = await fn(); out.innerHTML += `<br>✅ ${nombre}${r ? " — " + esc(r) : ""}`; return true; }
+    catch (e) { out.innerHTML += `<br>❌ ${nombre}: ${esc(e.message)}`; return false; }
+  };
+  out.innerHTML = "";
+  const cfg = CFG();
+  out.innerHTML = `Modelo: <strong>${esc(cfg.modelo)}</strong>`;
+  let ok = await paso("Conexión, clave y modelo", async () => {
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+      headers: { "x-api-key": cfg.clave, "anthropic-version": "2023-06-01", "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: cfg.modelo, max_tokens: 20, messages: [{ role: "user", content: "Responde solo: OK" }] }) });
+    if (!r.ok) throw new Error(await mensajeHttp(r));
+    return "la IA responde";
+  });
+  if (ok) await paso("Búsqueda de precios en internet", async () => {
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+      headers: { "x-api-key": cfg.clave, "anthropic-version": "2023-06-01", "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: cfg.modelo, max_tokens: 300, tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 1 }],
+        messages: [{ role: "user", content: "Busca en internet qué es el catálogo filatélico Edifil y responde en una frase." }] }) });
+    if (!r.ok) throw new Error(await mensajeHttp(r) + " (se analizará sin buscar en internet)");
+    return "disponible";
+  });
+  if (ok) await paso("Lectura de imágenes", async () => {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"); x.fillStyle = "#c33"; x.fillRect(0, 0, 64, 64);
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST",
+      headers: { "x-api-key": cfg.clave, "anthropic-version": "2023-06-01", "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: cfg.modelo, max_tokens: 30, messages: [{ role: "user", content: [imgBloque(c.toDataURL("image/jpeg")), { type: "text", text: "¿De qué color es la imagen? Una palabra." }] }] }) });
+    if (!r.ok) throw new Error(await mensajeHttp(r));
+    const d = await r.json(); return "ve la imagen (" + (d.content?.[0]?.text || "").trim() + ")";
+  });
 }
 
 /* ---------- exportar / importar ---------- */
