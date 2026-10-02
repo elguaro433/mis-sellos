@@ -2,7 +2,7 @@
    publicada; sin internet usa la última copia del armazón.
    ⚠️ NUNCA toca IndexedDB: ahí viven los sellos y las fotos. Borrar estas cachés
    no borra ni un sello. */
-const VERSION = '1.0.1';
+const VERSION = '1.0.2';
 const CACHE = 'missellos-' + VERSION;
 const ARMAZON = ['./', './index.html', './app.js', './ia_textos.js', './jszip.min.js',
   './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png'];

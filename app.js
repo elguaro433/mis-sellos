@@ -4,7 +4,7 @@
    (Claude) se llama directamente desde aquí con la clave que pone Emmanuel en Ajustes.
    No hay servidor ni nube. */
 
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.2";
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18,8 +18,8 @@ function quitarVelo() { $("#velo").classList.remove("on"); }
 /* ================= configuración (en este teléfono) ================= */
 const CFG = () => ({
   clave: leerLS("clave_api").trim(),
-  modelo: leerLS("modelo") || "claude-fable-5-1",
-  busqueda: leerLS("busqueda") !== "0",
+  modelo: leerLS("modelo") || "claude-sonnet-5-5",
+  busqueda: leerLS("busqueda") === "1",
   umbral: parseFloat(leerLS("umbral")) || 50,
 });
 const ESTADO = { get aviso_valor() { return CFG().umbral; } };
@@ -146,8 +146,9 @@ async function borrarSello(id) {
 
 /* ================= la IA (Claude, directo desde el teléfono) ================= */
 let aviso_modelo = false;
-async function llamarClaude(contenido, usarBusqueda) {
+async function llamarClaude(contenido, usarBusqueda, experto) {
   const cfg = CFG();
+  if (experto) cfg.modelo = leerLS("modelo_experto") || "claude-fable-5-1";
   if (!cfg.clave) throw new Error("Falta la clave de la IA. Ve a ⚙️ Ajustes y pégala (se saca en console.anthropic.com).");
   const pedir = async (conBusqueda) => {
     const cuerpo = { model: cfg.modelo, max_tokens: 9000,
@@ -172,7 +173,7 @@ async function llamarClaude(contenido, usarBusqueda) {
     if ((e.status === 404 || /model/i.test(e.message)) && cfg.modelo !== "claude-sonnet-5-5") {
       // ese modelo no está disponible en la cuenta: sigue con Sonnet y lo avisa
       cfg.modelo = "claude-sonnet-5-5"; guardarLS("modelo", cfg.modelo);
-      aviso_modelo = true; return await llamarClaude(contenido, usarBusqueda);
+      aviso_modelo = true; return await llamarClaude(contenido, usarBusqueda, false);
     }
     if (usarBusqueda && e.status === 400) { resp = await pedir(false); sinBusqueda = true; }
     else if (e instanceof TypeError) throw new Error("No hay conexión con la IA. Comprueba tu internet y vuelve a intentarlo.");
@@ -206,7 +207,7 @@ async function afinarSello(id, pista) {
   if (!foto) throw new Error("No encuentro la foto de este sello.");
   let t = PROMPT + "\n\nEsta foto contiene UN solo sello: analízalo a fondo con la máxima atención.";
   if (pista) t += `\nPista del coleccionista (puede ayudarte, pero compruébala): ${pista}`;
-  const { texto } = await llamarClaude([imgBloque(foto), { type: "text", text: t }], CFG().busqueda);
+  const { texto } = await llamarClaude([imgBloque(foto), { type: "text", text: t }], true, true);
   const d = extraerJSON(texto);
   if (!(d.sellos || []).length) throw new Error("La IA no ha podido analizar esa foto.");
   const n = d.sellos[0]; delete n.caja;
@@ -217,7 +218,7 @@ async function revalorarSello(id) {
   const s = SELLOS.find(x => x.id === Number(id));
   const resumen = {}; ["pais", "anio", "denominacion", "tema", "descripcion", "tipo", "catalogo_ref", "dentado", "uso", "estado", "defectos"]
     .forEach(k => resumen[k] = s[k]);
-  const { texto } = await llamarClaude([{ type: "text", text: PROMPT_REVALORAR.replace("{datos}", JSON.stringify(resumen)).replace(/\{\{/g, "{").replace(/\}\}/g, "}") }], CFG().busqueda);
+  const { texto } = await llamarClaude([{ type: "text", text: PROMPT_REVALORAR.replace("{datos}", JSON.stringify(resumen)).replace(/\{\{/g, "{").replace(/\}\}/g, "}") }], true, true);
   const n = extraerJSON(texto);
   await editarSello(id, n); s.valorado = ahora(); await BD.poner(s);
 }
@@ -694,7 +695,7 @@ async function abrirDetalle(id) {
 function cargarAjustes() {
   const c = CFG();
   $("#aj-clave").value = c.clave;
-  $("#aj-modelo").value = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"].includes(c.modelo) ? c.modelo : "claude-fable-5-1";
+  $("#aj-modelo").value = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5"].includes(c.modelo) ? c.modelo : "claude-sonnet-5-5";
   $("#aj-busqueda").checked = c.busqueda;
   $("#aj-umbral").value = c.umbral;
   $("#aj-guardar").onclick = () => {
