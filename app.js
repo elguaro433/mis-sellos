@@ -4,7 +4,7 @@
    (Claude) se llama directamente desde aquí con la clave que pone Emmanuel en Ajustes.
    No hay servidor ni nube. */
 
-const APP_VERSION = "1.0.4";
+const APP_VERSION = "1.0.5";
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -771,6 +771,16 @@ function cargarAjustes() {
   $("#b-exportar").onclick = exportarTodo;
   $("#b-probar").onclick = probarIA;
   $("#b-diag").onclick = diagnostico;
+  $("#aj-version").innerHTML = `Tienes la versión <strong>${APP_VERSION}</strong>.`;
+  $("#b-actualizar").onclick = async () => {
+    velo("Descargando la versión nueva…");
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+      const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k)));
+    } catch (e) {}
+    location.replace(location.pathname + "?r=" + Date.now());
+  };
   $("#f-prueba").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) probarCamara(f); };
   $("#f-importar").onchange = (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) importarZip(f); };
 }
