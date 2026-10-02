@@ -4,7 +4,7 @@
    (Claude) se llama directamente desde aquí con la clave que pone Emmanuel en Ajustes.
    No hay servidor ni nube. */
 
-const APP_VERSION = "1.0.5";
+const APP_VERSION = "1.0.6";
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -156,24 +156,27 @@ async function mensajeGemini(r) {
   if (r.status === 429) return "Se ha agotado la cuota gratuita de Gemini por ahora (por minuto o por día). Espera un poco y repite.";
   return `Error de Gemini (${r.status}): ${det.slice(0, 200)}`;
 }
-async function modeloGemini(clave) {
-  const guardado = leerLS("modelo_gemini");
-  if (guardado) return guardado;
+async function modelosGemini(clave) {
+  try { const g = JSON.parse(leerLS("modelos_gemini") || "[]"); if (g.length) return g; } catch (e) {}
   const r = await fetch(`${GEM}/models?pageSize=200`, { headers: { "x-goog-api-key": clave } });
   if (!r.ok) throw new Error(await mensajeGemini(r));
   const lista = ((await r.json()).models || [])
     .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
     .map(m => m.name.replace("models/", ""))
-    .filter(n => /^gemini-[\d.]+-flash$/.test(n));
-  lista.sort((x, y) => parseFloat(y.split("-")[1]) - parseFloat(x.split("-")[1]));
-  const elegido = lista[0] || "gemini-2.5-flash";
-  guardarLS("modelo_gemini", elegido);
-  return elegido;
+    .filter(n => /^gemini-[\d.]+-flash(-lite)?$/.test(n));
+  // más moderno primero; a igual versión, el normal antes que el «lite»
+  lista.sort((x, y) => parseFloat(y.split("-")[1]) - parseFloat(x.split("-")[1])
+    || (x.includes("lite") ? 1 : 0) - (y.includes("lite") ? 1 : 0));
+  if (!lista.length) lista.push("gemini-2.5-flash", "gemini-2.5-flash-lite");
+  guardarLS("modelos_gemini", JSON.stringify(lista));
+  return lista;
 }
 async function llamarGemini(contenido, usarBusqueda) {
   const cfg = CFG();
   if (!cfg.claveG) throw new Error("Falta la clave de Gemini. Ve a ⚙️ Ajustes y pégala (es gratis: aistudio.google.com/apikey).");
-  const modelo = await modeloGemini(cfg.claveG);
+  const todos = await modelosGemini(cfg.claveG);
+  const bueno = leerLS("modelo_gemini");
+  const orden = [bueno, ...todos.filter(m => m !== bueno)].filter(Boolean).slice(0, 8);
   const parts = contenido.map(b => b.type === "image"
     ? { inlineData: { mimeType: b.source.media_type, data: b.source.data } } : { text: b.text });
   const cuerpo = { systemInstruction: { parts: [{ text: CONOCIMIENTO }] },
@@ -181,21 +184,29 @@ async function llamarGemini(contenido, usarBusqueda) {
     generationConfig: { maxOutputTokens: 8192, temperature: 0.2 } };
   if (usarBusqueda) cuerpo.tools = [{ google_search: {} }];
   else cuerpo.generationConfig.responseMimeType = "application/json";
-  let r;
-  for (let intento = 0; intento < 3; intento++) {
-    try {
-      r = await fetch(`${GEM}/models/${modelo}:generateContent`, { method: "POST",
-        headers: { "x-goog-api-key": cfg.claveG, "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
-    } catch (e) { throw new Error("No hay conexión con Gemini. Comprueba tu internet y vuelve a intentarlo."); }
-    if (r.status === 503 && intento < 2) { await new Promise(ok => setTimeout(ok, 6000)); continue; }
-    break;
+  const sinCuota = [];
+  let ultimo = null;
+  for (const modelo of orden) {
+    let r;
+    for (let intento = 0; intento < 2; intento++) {
+      try {
+        r = await fetch(`${GEM}/models/${modelo}:generateContent`, { method: "POST",
+          headers: { "x-goog-api-key": cfg.claveG, "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
+      } catch (e) { throw new Error("No hay conexión con Gemini. Comprueba tu internet y vuelve a intentarlo."); }
+      if (r.status === 503 && intento === 0) { await new Promise(ok => setTimeout(ok, 5000)); continue; }
+      break;
+    }
+    if (r.status === 429) { sinCuota.push(modelo); ultimo = r; continue; }   // sin cuota: prueba otro modelo
+    if (r.status === 404 || r.status === 503) { ultimo = r; continue; }
+    if (!r.ok) throw new Error(await mensajeGemini(r));
+    const d = await r.json();
+    const texto = (d.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
+    if (!texto) throw new Error("Gemini no devolvió respuesta (puede que haya bloqueado la imagen). Repite la foto.");
+    guardarLS("modelo_gemini", modelo);
+    return { texto, sinBusqueda: false, modelo };
   }
-  if (r.status === 404) { guardarLS("modelo_gemini", ""); throw new Error("Ese modelo de Gemini ya no está disponible; repite y elegiré otro."); }
-  if (!r.ok) throw new Error(await mensajeGemini(r));
-  const d = await r.json();
-  const texto = (d.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("");
-  if (!texto) throw new Error("Gemini no devolvió respuesta (puede que haya bloqueado la imagen). Repite la foto.");
-  return { texto, sinBusqueda: false };
+  if (sinCuota.length) throw new Error(`Gemini dice que no quedan peticiones gratis (probé ${sinCuota.join(", ")}). Espera 1-2 minutos y repite; si sigue, la cuota diaria se ha gastado (se renueva cada día) o otro programa que usa el mismo proyecto de Google la está gastando.`);
+  throw new Error(ultimo ? await mensajeGemini(ultimo) : "No hay ningún modelo de Gemini disponible.");
 }
 
 /* ================= la IA (Claude, directo desde el teléfono) ================= */
@@ -793,10 +804,10 @@ async function probarGemini(out) {
   };
   const c = CFG();
   let ok = await paso("Clave y conexión con Gemini", async () => {
-    guardarLS("modelo_gemini", ""); const m = await modeloGemini(c.claveG); return "modelo " + m; });
+    guardarLS("modelo_gemini", ""); guardarLS("modelos_gemini", ""); const m = await modelosGemini(c.claveG); return "modelos disponibles: " + m.slice(0, 4).join(", "); });
   if (ok) ok = await paso("La IA responde", async () => {
     const r = await llamarGemini([{ type: "text", text: 'Responde solo con este JSON: {"ok": true}' }], false);
-    return r.texto.trim().slice(0, 30); });
+    return "usó " + r.modelo; });
   if (ok) await paso("Lectura de imágenes", async () => {
     const c2 = document.createElement("canvas"); c2.width = c2.height = 64;
     const x = c2.getContext("2d"); x.fillStyle = "#c33"; x.fillRect(0, 0, 64, 64);
