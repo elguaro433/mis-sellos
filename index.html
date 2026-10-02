@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1b2a41">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mis Sellos">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<title>📮 Mis Sellos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📮</text></svg>">
+<style>
+:root {
+  --fondo: #14202f; --panel: #1c2c42; --tarjeta: #243651; --borde: #36506f;
+  --texto: #f1ede4; --suave: #aab9cc; --oro: #e9b949; --verde: #6fd08c;
+  --rojo: #ee7b66; --azul: #78b7e6;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--fondo); color: var(--texto);
+  font-family: "Segoe UI", system-ui, sans-serif; font-size: 16px;
+  padding-bottom: 84px; }
+header { position: sticky; top: 0; z-index: 5; background: var(--panel);
+  border-bottom: 1px solid var(--borde); padding: 10px 14px; }
+header h1 { margin: 0; font-size: 20px; color: var(--oro); }
+#resumen { font-size: 13px; color: var(--suave); margin-top: 2px; }
+main { max-width: 900px; margin: 0 auto; padding: 14px; }
+nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+  background: var(--panel); border-top: 1px solid var(--borde);
+  padding-bottom: env(safe-area-inset-bottom); z-index: 6; }
+nav button { flex: 1; background: none; border: 0; color: var(--suave);
+  padding: 10px 4px 12px; font-size: 13px; }
+nav button span { display: block; font-size: 24px; }
+nav button.on { color: var(--oro); font-weight: 700; }
+.vista { display: none; } .vista.on { display: block; }
+.boton { background: var(--oro); color: #1b1b1b; border: 0; border-radius: 12px;
+  padding: 14px 18px; font-size: 17px; font-weight: 700; width: 100%; }
+.boton.sec { background: var(--tarjeta); color: var(--texto); border: 1px solid var(--borde); }
+.boton.chico { width: auto; padding: 8px 14px; font-size: 14px; border-radius: 9px; }
+.boton.rojo { background: #8a3a2c; color: #fff; }
+.boton:disabled { opacity: .5; }
+.grande { padding: 26px 18px; font-size: 21px; }
+.caja { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px;
+  padding: 14px; margin: 12px 0; }
+.suave { color: var(--suave); font-size: 14px; }
+.fila { display: flex; gap: 10px; flex-wrap: wrap; }
+.fila > * { flex: 1; min-width: 120px; }
+label { display: block; font-size: 12px; color: var(--suave); margin: 8px 0 3px; }
+input, select, textarea { width: 100%; background: var(--fondo); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: 9px; padding: 10px; font-size: 16px; }
+textarea { min-height: 60px; }
+.sello-res { display: grid; grid-template-columns: 110px 1fr; gap: 12px; }
+.sello-res img, .tarj img { width: 100%; border-radius: 8px; background: #000;
+  object-fit: contain; max-height: 160px; }
+.valor { font-size: 22px; font-weight: 800; color: var(--verde); }
+.valor.bajo { color: var(--suave); }
+.chip { display: inline-block; font-size: 12px; padding: 3px 9px; border-radius: 99px;
+  background: var(--fondo); border: 1px solid var(--borde); margin: 2px 4px 2px 0; }
+.chip.oro { border-color: var(--oro); color: var(--oro); }
+.chip.rojo { border-color: var(--rojo); color: var(--rojo); }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
+.tarj { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+  padding: 8px; position: relative; }
+.tarj img { height: 110px; }
+.tarj .t { font-weight: 700; font-size: 14px; margin-top: 6px; }
+.tarj .s { font-size: 12px; color: var(--suave); }
+.tarj .v { font-size: 14px; color: var(--verde); font-weight: 700; }
+.tarj .fav { position: absolute; top: 8px; right: 10px; font-size: 20px; }
+.filtros { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.filtros select, .filtros input { width: auto; flex: 1; min-width: 110px; font-size: 14px; padding: 8px; }
+.tog { background: var(--tarjeta); border: 1px solid var(--borde); color: var(--texto);
+  border-radius: 99px; padding: 7px 12px; font-size: 14px; }
+.verpor { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px; }
+.verpor button { white-space: nowrap; background: var(--tarjeta); color: var(--texto);
+  border: 1px solid var(--borde); border-radius: 99px; padding: 8px 14px; font-size: 14px; }
+.verpor button.on { background: var(--oro); color: #1b1b1b; border-color: var(--oro); font-weight: 700; }
+.grupo { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px;
+  padding: 10px; text-align: left; color: var(--texto); font-size: 14px; }
+.grupo img { width: 100%; height: 80px; object-fit: contain; background: #000; border-radius: 8px; margin-bottom: 6px; }
+.grupo b { display: block; font-size: 16px; }
+.grupo .v { color: var(--verde); font-weight: 700; }
+.migas { margin: 4px 0 10px; font-size: 14px; }
+.migas button { background: none; border: 0; color: var(--azul); font-size: 14px; padding: 0; text-decoration: underline; }
+.chip.joya { border-color: #7ad7ff; color: #7ad7ff; font-weight: 700; }
+.alerta { text-align: center; }
+.alerta h2 { margin: 0 0 6px; color: #7ad7ff; font-size: 26px; }
+.alerta .gran { font-size: 30px; font-weight: 800; color: var(--verde); margin: 4px 0; }
+.info { background: var(--fondo); border: 1px solid var(--borde); border-radius: 10px;
+  padding: 8px 10px; margin: 8px 0; font-size: 13px; }
+.info div { display: flex; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #2c4260; }
+.info div:last-child { border: 0; }
+.info b { min-width: 92px; color: var(--suave); font-weight: 600; }
+.cand { background: var(--fondo); border: 1px solid var(--borde); border-radius: 10px;
+  padding: 8px 10px; margin: 6px 0; font-size: 13px; }
+.cand .p { color: var(--oro); font-weight: 700; }
+.cand button { margin-top: 6px; }
+.resumen-grande { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 14px;
+  padding: 14px; margin: 10px 0; }
+.resumen-grande .gran { font-size: 26px; font-weight: 800; color: var(--verde); }
+.pasaporte { display: flex; gap: 12px; overflow-x: auto; padding: 6px 0 10px; }
+.pasaporte button { background: none; border: 0; color: var(--texto); text-align: center; min-width: 58px; font-size: 11px; }
+.pasaporte span { display: block; font-size: 30px; line-height: 1.1; }
+.barra-rareza { display: flex; height: 12px; border-radius: 99px; overflow: hidden; margin: 6px 0; background: var(--fondo); }
+.barra-rareza i { display: block; }
+.recientes { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.recientes .tarj { min-width: 130px; max-width: 130px; }
+.titulo-sec { font-size: 12px; letter-spacing: .08em; color: var(--suave); margin: 14px 0 4px; text-transform: uppercase; }
+.rejilla.lista { grid-template-columns: 1fr; }
+.rejilla.lista .tarj { display: grid; grid-template-columns: 90px 1fr; gap: 10px; align-items: center; }
+.rejilla.lista .tarj img { height: 80px; }
+.tog.on { border-color: var(--oro); color: var(--oro); }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 20;
+  overflow-y: auto; display: none; }
+.modal.on { display: block; }
+.modal > div { background: var(--panel); margin: 20px auto; max-width: 640px;
+  border-radius: 16px; padding: 16px; }
+.velo { position: fixed; inset: 0; background: rgba(10,16,26,.85); z-index: 30;
+  display: none; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+.velo.on { display: flex; }
+.rueda { width: 54px; height: 54px; border: 6px solid var(--borde);
+  border-top-color: var(--oro); border-radius: 50%; animation: gira 1s linear infinite;
+  margin: 0 auto 16px; }
+@keyframes gira { to { transform: rotate(360deg); } }
+.aviso { background: #3a3220; border: 1px solid var(--oro); border-radius: 12px;
+  padding: 12px; margin: 12px 0; font-size: 14px; }
+.error { background: #3d2320; border-color: var(--rojo); }
+ul.v { margin: 4px 0 0 18px; padding: 0; font-size: 13px; color: var(--suave); }
+a { color: var(--azul); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📮 Mis Sellos</h1>
+  <div id="resumen">Cargando…</div>
+</header>
+
+<main>
+  <!-- ============ FOTO ============ -->
+  <section id="v-foto" class="vista on">
+    <div id="aviso-ia"></div>
+    <p class="suave" style="margin-top:0">Haz una foto a <strong>un sello</strong>, sobre fondo liso, con buena luz y sin sombras. En cuanto se sube, la IA los separa, los identifica y los valora.</p>
+    <input id="f-camara" type="file" accept="image/*" capture="environment" hidden>
+    <input id="f-galeria" type="file" accept="image/*" hidden>
+    <button class="boton grande" id="b-camara">📷 Hacer foto</button>
+    <div style="height:10px"></div>
+    <button class="boton sec" id="b-galeria">🖼️ Elegir de la galería</button>
+    <div class="caja">
+      <label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--texto);margin:0 0 10px">
+        <input type="checkbox" id="rapido" style="width:22px;height:22px">
+        ⚡ Modo rápido: hago la foto y se analiza y se guarda solo (los repetidos se suman). Se corrige luego en Colección.</label>
+      <div class="fila">
+        <div><label>Álbum / carpeta para esta tanda</label>
+          <input id="def-album" list="lista-albumes" placeholder="ej. Álbum 1, Sobre rojo…"></div>
+        <div><label>Página</label><input id="def-pagina" placeholder="ej. 12"></div>
+      </div>
+      <div class="suave" style="margin-top:6px">Se pondrá en todos los sellos que guardes ahora.</div>
+    </div>
+    <div id="resultados"></div>
+  </section>
+
+  <!-- ============ COLECCIÓN ============ -->
+  <section id="v-col" class="vista">
+    <div class="verpor" id="verpor"></div>
+    <div id="migas"></div>
+    <div id="grupos" class="rejilla"></div>
+    <div id="bloque-lista">
+    <div id="panel-inicio"></div>
+    <div class="filtros">
+      <input id="q" type="search" placeholder="🔎 Buscar (país, año, tema…)" style="flex:3">
+      <select id="orden" style="flex:1">
+        <option value="nuevo">Más recientes</option>
+        <option value="valor">Mayor valor</option>
+        <option value="pais">País</option>
+        <option value="anio">Año</option>
+      </select>
+    </div>
+    <div class="filtros" id="selectores"></div>
+    <div class="filtros">
+      <button class="tog" id="t-fav">⭐ Favoritos</button>
+      <button class="tog" id="t-rev">🔍 Por revisar</button>
+      <button class="tog" id="t-dup">🔁 Repetidos</button>
+      <button class="tog" id="t-val">💎 Valiosos</button>
+      <button class="tog" id="t-dud">❓ Dudosos</button>
+      <button class="tog" id="t-raro">💠 Raros+</button>
+      <button class="tog" id="t-ant">📜 Antes de 1950</button>
+      <button class="tog" id="t-vista">▦ Cuadrícula / ☰ Lista</button>
+      <button class="tog" id="t-limpiar">✕ Limpiar</button>
+    </div>
+    <div id="totales" class="suave"></div>
+    <div id="rejilla" class="rejilla"></div>
+    </div>
+  </section>
+
+  <!-- ============ AJUSTES ============ -->
+  <section id="v-aj" class="vista">
+    <div class="caja"><h3 style="margin-top:0">🤖 La IA</h3>
+      <p class="suave">Pega aquí <strong>tu clave de la IA</strong> (una sola vez). Se guarda <strong>solo en este teléfono</strong>.
+      Se saca en <strong>console.anthropic.com → API keys</strong> y hay que añadir algo de saldo (con 5 € vas sobrado para empezar).</p>
+      <label>Clave de la IA</label>
+      <input id="aj-clave" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <label>Modelo</label>
+      <input id="aj-modelo" placeholder="claude-sonnet-5-5">
+      <label style="display:flex;gap:10px;align-items:center;font-size:15px;color:var(--texto)">
+        <input type="checkbox" id="aj-busqueda" style="width:22px;height:22px"> Buscar precios y datos en internet (más exacto, cuesta algo más)</label>
+      <label>Avisarme con 💎 si un sello vale más de (€)</label>
+      <input id="aj-umbral" inputmode="decimal">
+      <button class="boton" style="margin-top:12px" id="aj-guardar">💾 Guardar</button>
+      <div id="aj-ok" class="suave" style="margin-top:8px"></div>
+      <p class="suave">Cada foto gasta unos céntimos de tu saldo de la IA.</p>
+    </div>
+    <div class="caja"><h3 style="margin-top:0">💾 Copia de seguridad</h3>
+      <p class="suave" id="aj-estado"></p>
+      <p class="suave">Tus sellos y fotos viven en este teléfono. <strong>Haz una copia de vez en cuando</strong> (y antes de cambiar de móvil):
+      baja un archivo ZIP con un <strong>catálogo web con buscador</strong> (<em>catalogo.html</em>), la <strong>hoja de Excel</strong>, los datos en <strong>JSON</strong> y todas las <strong>fotos</strong>. Es tuyo para siempre.</p>
+      <button class="boton" id="b-exportar">⬇️ Exportar TODO</button>
+      <div style="height:10px"></div>
+      <input id="f-importar" type="file" accept=".zip,application/zip" hidden>
+      <button class="boton sec" onclick="document.getElementById('f-importar').click()">⬆️ Importar una copia</button>
+    </div>
+    <div class="caja"><h3 style="margin-top:0">📲 Instalarla en el iPhone</h3>
+      <ol class="suave"><li>Abre el enlace en <strong>Safari</strong> (en Chrome no vale).</li>
+      <li>Compartir → <strong>Añadir a pantalla de inicio</strong>.</li>
+      <li>Ábrela <strong>siempre desde el icono</strong>. Safari borra los datos de las webs que no se abren en 7 días; las apps instaladas están a salvo.</li></ol>
+    </div>
+    <div class="caja"><h3 style="margin-top:0">⚠️ Sobre los valores</h3>
+      <p class="suave">Son <strong>estimaciones orientativas</strong> hechas por IA a partir de una foto y de precios de mercado. El estado real, la filigrana, el dentado o una variedad pueden cambiar mucho el precio. Los marcados «🔍 por revisar» merecen mirarse en un catálogo (Michel, Scott, Yvert, Edifil) o con un experto antes de vender.</p>
+    </div>
+  </section>
+</main>
+
+<datalist id="lista-albumes"></datalist>
+
+<nav>
+  <button data-v="foto" class="on"><span>📷</span>Foto</button>
+  <button data-v="col"><span>🗂️</span>Colección</button>
+  <button data-v="aj"><span>⚙️</span>Ajustes</button>
+</nav>
+
+<div class="modal" id="modal"><div id="modal-c"></div></div>
+<div class="velo" id="velo"><div><div class="rueda"></div><div id="velo-t">Analizando…</div></div></div>
+
+<script src="jszip.min.js"></script>
+<script src="ia_textos.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
